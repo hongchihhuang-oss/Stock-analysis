@@ -2,3 +2,7 @@
 yfinance
 pandas
 ta
+twstock
+lxml
+requests
+beautifulsoup4
