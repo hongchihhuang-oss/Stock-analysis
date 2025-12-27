@@ -4,226 +4,845 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Chip Master v8.1 (滑動修復版)</title>
+    <title>Pro Stock v10.0 (全功能旗艦版)</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { 
-            background-color: #0b0e11; 
-            color: #e1e1e1; 
-            font-family: -apple-system, Roboto, sans-serif; 
-            overflow: hidden; /* 防止 Body 捲動，交給 container */
-        }
+        body { background-color: #0b0e11; color: #e1e1e1; font-family: -apple-system, Roboto, sans-serif; overflow: hidden; }
+        .snap-container { height: 100vh; width: 100vw; overflow-y: scroll; scroll-snap-type: y mandatory; }
+        .stock-card { height: 100vh; width: 100vw; scroll-snap-align: start; padding: 15px; display: flex; flex-direction: column; background: #0b0e11; border-bottom: 1px solid #222; position: relative; }
         
-        /* 核心修復：使用 dvh (Dynamic Viewport Height) 解決手機網址列遮擋問題 */
-        .snap-container { 
-            height: 100vh; 
-            height: 100dvh; 
-            width: 100vw; 
-            overflow-y: scroll; 
-            scroll-snap-type: y mandatory; 
-            scroll-behavior: smooth;
-            -webkit-overflow-scrolling: touch; /* iOS 滑動慣性修復 */
-        }
+        /* Dashboard */
+        .dashboard { background: linear-gradient(135deg, #1e2a78 0%, #ff5e62 100%); justify-content: center; align-items: center; text-align: center; }
+        .mkt-status { font-size: 2.5em; font-weight: bold; margin: 20px 0; }
         
-        .stock-card { 
-            height: 100vh; 
-            height: 100dvh; 
-            width: 100vw; 
-            scroll-snap-align: start; 
-            padding: 20px; 
-            display: flex; 
-            flex-direction: column; 
-            border-bottom: 1px solid #222; 
-            position: relative;
-        }
+        /* Stock Header */
+        .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        .stock-name { font-size: 2em; font-weight: 800; margin: 0; }
+        .stock-id { color: #888; font-size: 1em; }
+        .tag-ind { background: #222; padding: 4px 10px; border-radius: 10px; font-size: 0.8em; }
         
-        /* 儀表板樣式 */
-        .dashboard-card { 
-            background: linear-gradient(135deg, #1e2a78 0%, #ff5e62 100%); 
-            align-items: center; 
-            justify-content: center; 
-        }
-        .chip-box { background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; text-align: center; min-width: 250px; }
-        .chip-stat { font-size: 2em; font-weight: bold; margin: 10px 0; }
+        /* Price */
+        .price-row { display: flex; align-items: baseline; margin-bottom: 15px; }
+        .price { font-size: 3em; font-weight: 800; }
+        .change { font-size: 1.3em; font-weight: bold; margin-left: 15px; }
+        .up { color: #ff4d4d; } .down { color: #00b894; }
         
-        /* 動畫箭頭 */
-        .scroll-hint {
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            animation: bounce 2s infinite; font-size: 1.5em; opacity: 0.8;
-        }
-        @keyframes bounce {
-            0%, 20%, 50%, 80%, 100% {transform: translateX(-50%) translateY(0);}
-            40% {transform: translateX(-50%) translateY(-10px);}
-            60% {transform: translateX(-50%) translateY(-5px);}
-        }
-
-        /* 個股卡片 */
-        .stock-id { font-size: 2.5em; font-weight: bold; }
-        .price { font-size: 3.5em; font-weight: 800; margin: 10px 0; }
-        .signal { font-size: 1.2em; color: #f39c12; margin-bottom: 20px; }
-        .reasons li { font-size: 1.1em; margin-bottom: 10px; color: #ccc; }
+        /* 壓力支撐條 (Visual Bar) */
+        .range-box { margin-bottom: 20px; }
+        .range-bar { height: 8px; background: #333; border-radius: 4px; position: relative; margin: 5px 0; }
+        .range-fill { height: 100%; background: linear-gradient(90deg, #00b894, #ff4d4d); opacity: 0.5; border-radius: 4px; }
+        .range-cursor { position: absolute; top: -4px; width: 4px; height: 16px; background: #fff; box-shadow: 0 0 5px white; border-radius: 2px; }
+        .range-label { display: flex; justify-content: space-between; font-size: 0.75em; color: #888; }
         
-        .footer { position: absolute; bottom: 10px; width: 100%; text-align: center; color: #666; font-size: 0.8em; left:0; }
-        .page-counter { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 10px; }
+        /* Grid Data */
+        .grid-box { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 15px; }
+        .grid-item { background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px; text-align: center; }
+        .lbl { font-size: 0.7em; color: #aaa; display: block; }
+        .val { font-size: 0.9em; font-weight: bold; }
+        
+        /* Signal & Tags */
+        .signal-box { padding: 10px; border-radius: 8px; margin-bottom: 15px; font-weight: bold; border-left: 4px solid; display: flex; justify-content: space-between; align-items: center; }
+        .tags { display: flex; gap: 5px; }
+        .tag { font-size: 0.7em; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; }
+        
+        /* News */
+        .news-area { flex-grow: 1; overflow-y: auto; font-size: 0.9em; color: #bbb; }
+        .news-area li { margin-bottom: 8px; border-bottom: 1px solid #222; padding-bottom: 4px; }
+        
+        .footer { position: absolute; bottom: 10px; width: 100%; text-align: center; color: #444; font-size: 0.7em; left: 0; }
+        .pg-num { position: absolute; top: 20px; right: 20px; background: #333; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; }
     </style>
 </head>
 <body>
     <div class="snap-container">
-
-        <div class="stock-card dashboard-card">
-            <h1 style="margin-bottom:20px;">🏦 今日戰情室</h1>
-            <div class="chip-box">
-                <div>大盤氣氛推算</div>
-                <div class="chip-stat" style="color:#ff3333">📈 法人偏多</div>
-                <div style="font-size:0.9em; color:#ddd;">外資動向: 0.0 億</div>
-            </div>
-            <div style="margin-top:20px;">
-                👇 掃描結果：共 13 檔訊號股
-            </div>
-            <div class="scroll-hint">⬇️ 往上滑動</div>
-            <div class="footer">v8.1 (滑動修復版)</div>
+        <div class="stock-card dashboard">
+            <h2 style="color:rgba(255,255,255,0.8)">🌍 全球趨勢</h2>
+            <div class="mkt-status" style="color: #ff4d4d">🚀 多頭助攻</div>
+            <p style="background:rgba(0,0,0,0.2); padding:15px; border-radius:10px;">
+                台股站穩月線 + 美股半導體上漲<br>
+                <span style="font-size:0.8em; color:#ccc">TWII: 28556</span>
+            </p>
+            <div style="margin-top:20px; font-size:0.9em; animation: bounce 1.5s infinite;">往上滑動看熱門股 ▲</div>
         </div>
 
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">1 / 13</div>
-            <div class="stock-id">6531.TW</div>
-            <div class="price" style="color:#00cc66">$412.0</div>
-            <div class="signal">🔥 主力買進</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ MA5 黃金交叉</li><li>✔ 爆量攻擊</li>
-            </ul>
-            <div class="footer">RSI: 56.9 | v8.1 (滑動修復版)</div>
+        <div class="stock-card">
+            <div class="pg-num">1 / 11</div>
+            
+            <div class="top-row">
+                <div>
+                    <h1 class="stock-name">晶豪科</h1>
+                    <span class="stock-id">3006.TW</span>
+                </div>
+                <div class="tag-ind">半導體業</div>
+            </div>
+            
+            <div class="price-row">
+                <span class="price">$105.0</span>
+                <span class="change up">+8.92%</span>
+            </div>
+            
+            <div class="range-box">
+                <div class="range-bar">
+                    <div class="range-fill" style="width: 100%"></div>
+                    <div class="range-cursor" style="left: 97.10144927536231%"></div>
+                </div>
+                <div class="range-label">
+                    <span>支撐 $71.5</span>
+                    <span>壓力 $106.0</span>
+                </div>
+            </div>
+            
+            <div class="signal-box" style="background: #95a5a620; border-color: #95a5a6; color: #95a5a6">
+                <span>👀 持續觀察</span>
+                <div class="tags">
+                    <span class="tag">多頭排列</span><span class="tag">爆量</span>
+                </div>
+            </div>
+            
+            <div class="grid-box">
+                <div class="grid-item">
+                    <span class="lbl">KD(9,3)</span>
+                    <span class="val">K: 96.5</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">本益比</span>
+                    <span class="val">-</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">EPS</span>
+                    <span class="val">$-2.42</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">法人目標</span>
+                    <span class="val" style="color:#f1c40f">$65.0</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">分析建議</span>
+                    <span class="val">中性</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">ROE</span>
+                    <span class="val">-7.0%</span>
+                </div>
+            </div>
+            
+            <div class="news-area">
+                <div style="color:#f39c12; font-weight:bold; margin-bottom:5px;">📰 重點新聞</div>
+                <ul style="padding-left:0; list-style:none;">
+                    <li>【公告】晶豪科董事會決議對關係人之捐贈事宜</li><li>【公告】晶豪科 2025年11月合併營收14.01億元 年增45.38%</li>
+                </ul>
+            </div>
+            
+            <div class="footer">v10.0 (全功能旗艦版)</div>
         </div>
-        
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">2 / 13</div>
-            <div class="stock-id">3189.TW</div>
-            <div class="price" style="color:#ff3333">$153.0</div>
-            <div class="signal">🔥 主力買進</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ 爆量攻擊</li>
-            </ul>
-            <div class="footer">RSI: 59.4 | v8.1 (滑動修復版)</div>
+    
+        <div class="stock-card">
+            <div class="pg-num">2 / 11</div>
+            
+            <div class="top-row">
+                <div>
+                    <h1 class="stock-name">力成</h1>
+                    <span class="stock-id">6239.TW</span>
+                </div>
+                <div class="tag-ind">半導體業</div>
+            </div>
+            
+            <div class="price-row">
+                <span class="price">$175.0</span>
+                <span class="change up">+6.38%</span>
+            </div>
+            
+            <div class="range-box">
+                <div class="range-bar">
+                    <div class="range-fill" style="width: 100%"></div>
+                    <div class="range-cursor" style="left: 76.40449438202246%"></div>
+                </div>
+                <div class="range-label">
+                    <span>支撐 $141.0</span>
+                    <span>壓力 $185.5</span>
+                </div>
+            </div>
+            
+            <div class="signal-box" style="background: #95a5a620; border-color: #95a5a6; color: #95a5a6">
+                <span>👀 持續觀察</span>
+                <div class="tags">
+                    <span class="tag">多頭排列</span><span class="tag">爆量</span>
+                </div>
+            </div>
+            
+            <div class="grid-box">
+                <div class="grid-item">
+                    <span class="lbl">KD(9,3)</span>
+                    <span class="val">K: 82.1</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">本益比</span>
+                    <span class="val">25.1倍</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">EPS</span>
+                    <span class="val">$6.97</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">法人目標</span>
+                    <span class="val" style="color:#f1c40f">$171.875</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">分析建議</span>
+                    <span class="val">買進</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">ROE</span>
+                    <span class="val">9.8%</span>
+                </div>
+            </div>
+            
+            <div class="news-area">
+                <div style="color:#f39c12; font-weight:bold; margin-bottom:5px;">📰 重點新聞</div>
+                <ul style="padding-left:0; list-style:none;">
+                    <li>〈焦點股〉GPU、ASIC 大單湧入 封測股輪動 華泰、欣銓雙雙亮燈</li><li>AI晶片自研潮引爆封測商機 二輪受惠股欣銓衝漲停、力成跟漲不落人後</li>
+                </ul>
+            </div>
+            
+            <div class="footer">v10.0 (全功能旗艦版)</div>
         </div>
-        
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">3 / 13</div>
-            <div class="stock-id">8112.TW</div>
-            <div class="price" style="color:#ff3333">$75.3</div>
-            <div class="signal">🔥 主力買進</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ 爆量攻擊</li>
-            </ul>
-            <div class="footer">RSI: 59.4 | v8.1 (滑動修復版)</div>
+    
+        <div class="stock-card">
+            <div class="pg-num">3 / 11</div>
+            
+            <div class="top-row">
+                <div>
+                    <h1 class="stock-name">華新</h1>
+                    <span class="stock-id">1605.TW</span>
+                </div>
+                <div class="tag-ind">電器電纜</div>
+            </div>
+            
+            <div class="price-row">
+                <span class="price">$33.45</span>
+                <span class="change up">+5.69%</span>
+            </div>
+            
+            <div class="range-box">
+                <div class="range-bar">
+                    <div class="range-fill" style="width: 100%"></div>
+                    <div class="range-cursor" style="left: 81.8181944287527%"></div>
+                </div>
+                <div class="range-label">
+                    <span>支撐 $24.9</span>
+                    <span>壓力 $35.35</span>
+                </div>
+            </div>
+            
+            <div class="signal-box" style="background: #95a5a620; border-color: #95a5a6; color: #95a5a6">
+                <span>👀 持續觀察</span>
+                <div class="tags">
+                    <span class="tag">多頭排列</span><span class="tag">爆量</span>
+                </div>
+            </div>
+            
+            <div class="grid-box">
+                <div class="grid-item">
+                    <span class="lbl">KD(9,3)</span>
+                    <span class="val">K: 94.6</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">本益比</span>
+                    <span class="val">92.9倍</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">EPS</span>
+                    <span class="val">$0.36</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">法人目標</span>
+                    <span class="val" style="color:#f1c40f">$30.0</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">分析建議</span>
+                    <span class="val">中性</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">ROE</span>
+                    <span class="val">0.7%</span>
+                </div>
+            </div>
+            
+            <div class="news-area">
+                <div style="color:#f39c12; font-weight:bold; margin-bottom:5px;">📰 重點新聞</div>
+                <ul style="padding-left:0; list-style:none;">
+                    <li>華新三大引擎推動營運，高雄海纜廠拚27年量產</li><li>傳產拚轉型！華新麗華推新品牌　鎖定高端製造、AI市場</li>
+                </ul>
+            </div>
+            
+            <div class="footer">v10.0 (全功能旗艦版)</div>
         </div>
-        
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">4 / 13</div>
-            <div class="stock-id">6239.TW</div>
-            <div class="price" style="color:#ff3333">$175.0</div>
-            <div class="signal">🔥 主力買進</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ 爆量攻擊</li>
-            </ul>
-            <div class="footer">RSI: 62.8 | v8.1 (滑動修復版)</div>
+    
+        <div class="stock-card">
+            <div class="pg-num">4 / 11</div>
+            
+            <div class="top-row">
+                <div>
+                    <h1 class="stock-name">創意</h1>
+                    <span class="stock-id">3443.TW</span>
+                </div>
+                <div class="tag-ind">半導體業</div>
+            </div>
+            
+            <div class="price-row">
+                <span class="price">$2115.0</span>
+                <span class="change up">+4.44%</span>
+            </div>
+            
+            <div class="range-box">
+                <div class="range-bar">
+                    <div class="range-fill" style="width: 100%"></div>
+                    <div class="range-cursor" style="left: 79.81220657276995%"></div>
+                </div>
+                <div class="range-label">
+                    <span>支撐 $1265.0</span>
+                    <span>壓力 $2330.0</span>
+                </div>
+            </div>
+            
+            <div class="signal-box" style="background: #95a5a620; border-color: #95a5a6; color: #95a5a6">
+                <span>👀 持續觀察</span>
+                <div class="tags">
+                    <span class="tag">跌破月線</span>
+                </div>
+            </div>
+            
+            <div class="grid-box">
+                <div class="grid-item">
+                    <span class="lbl">KD(9,3)</span>
+                    <span class="val">K: 40.3</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">本益比</span>
+                    <span class="val">82.6倍</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">EPS</span>
+                    <span class="val">$25.59</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">法人目標</span>
+                    <span class="val" style="color:#f1c40f">$1846.125</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">分析建議</span>
+                    <span class="val">買進</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">ROE</span>
+                    <span class="val">31.2%</span>
+                </div>
+            </div>
+            
+            <div class="news-area">
+                <div style="color:#f39c12; font-weight:bold; margin-bottom:5px;">📰 重點新聞</div>
+                <ul style="padding-left:0; list-style:none;">
+                    <li>【公告】創意 2025年11月合併營收39.36億元 年增114.22%</li><li>創意太兇遭列注意股！10月自結每股盈餘1.45元 年增18%</li>
+                </ul>
+            </div>
+            
+            <div class="footer">v10.0 (全功能旗艦版)</div>
         </div>
-        
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">5 / 13</div>
-            <div class="stock-id">3167.TW</div>
-            <div class="price" style="color:#ff3333">$240.0</div>
-            <div class="signal">🔥 主力買進</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ 爆量攻擊</li>
-            </ul>
-            <div class="footer">RSI: 64.4 | v8.1 (滑動修復版)</div>
+    
+        <div class="stock-card">
+            <div class="pg-num">5 / 11</div>
+            
+            <div class="top-row">
+                <div>
+                    <h1 class="stock-name">金像電</h1>
+                    <span class="stock-id">2368.TW</span>
+                </div>
+                <div class="tag-ind">電子零組件業</div>
+            </div>
+            
+            <div class="price-row">
+                <span class="price">$697.0</span>
+                <span class="change up">+4.34%</span>
+            </div>
+            
+            <div class="range-box">
+                <div class="range-bar">
+                    <div class="range-fill" style="width: 100%"></div>
+                    <div class="range-cursor" style="left: 98.09220985691573%"></div>
+                </div>
+                <div class="range-label">
+                    <span>支撐 $388.5</span>
+                    <span>壓力 $703.0</span>
+                </div>
+            </div>
+            
+            <div class="signal-box" style="background: #95a5a620; border-color: #95a5a6; color: #95a5a6">
+                <span>👀 持續觀察</span>
+                <div class="tags">
+                    <span class="tag">多頭排列</span>
+                </div>
+            </div>
+            
+            <div class="grid-box">
+                <div class="grid-item">
+                    <span class="lbl">KD(9,3)</span>
+                    <span class="val">K: 95.2</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">本益比</span>
+                    <span class="val">44.1倍</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">EPS</span>
+                    <span class="val">$15.82</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">法人目標</span>
+                    <span class="val" style="color:#f1c40f">$661.1111</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">分析建議</span>
+                    <span class="val">中性</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">ROE</span>
+                    <span class="val">34.0%</span>
+                </div>
+            </div>
+            
+            <div class="news-area">
+                <div style="color:#f39c12; font-weight:bold; margin-bottom:5px;">📰 重點新聞</div>
+                <ul style="padding-left:0; list-style:none;">
+                    <li>【公告】代子公司Gold Circuit Electronics (Thailand) Co.,Ltd.公告取得廠務工程之相關資料</li><li>金像電：Gold Circuit Electronics (Thailand)取得廠務工程一批，計約10.61億元</li>
+                </ul>
+            </div>
+            
+            <div class="footer">v10.0 (全功能旗艦版)</div>
         </div>
-        
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">6 / 13</div>
-            <div class="stock-id">6257.TW</div>
-            <div class="price" style="color:#ff3333">$109.5</div>
-            <div class="signal">🔥 主力買進</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ 爆量攻擊</li>
-            </ul>
-            <div class="footer">RSI: 64.7 | v8.1 (滑動修復版)</div>
+    
+        <div class="stock-card">
+            <div class="pg-num">6 / 11</div>
+            
+            <div class="top-row">
+                <div>
+                    <h1 class="stock-name">聯鈞</h1>
+                    <span class="stock-id">3450.TW</span>
+                </div>
+                <div class="tag-ind">半導體業</div>
+            </div>
+            
+            <div class="price-row">
+                <span class="price">$273.0</span>
+                <span class="change up">+2.63%</span>
+            </div>
+            
+            <div class="range-box">
+                <div class="range-bar">
+                    <div class="range-fill" style="width: 100%"></div>
+                    <div class="range-cursor" style="left: 65.3061224489796%"></div>
+                </div>
+                <div class="range-label">
+                    <span>支撐 $209.0</span>
+                    <span>壓力 $307.0</span>
+                </div>
+            </div>
+            
+            <div class="signal-box" style="background: #95a5a620; border-color: #95a5a6; color: #95a5a6">
+                <span>👀 持續觀察</span>
+                <div class="tags">
+                    <span class="tag">多頭排列</span>
+                </div>
+            </div>
+            
+            <div class="grid-box">
+                <div class="grid-item">
+                    <span class="lbl">KD(9,3)</span>
+                    <span class="val">K: 69.8</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">本益比</span>
+                    <span class="val">50.0倍</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">EPS</span>
+                    <span class="val">$5.46</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">法人目標</span>
+                    <span class="val" style="color:#f1c40f">$360.0</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">分析建議</span>
+                    <span class="val">中性</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">ROE</span>
+                    <span class="val">20.4%</span>
+                </div>
+            </div>
+            
+            <div class="news-area">
+                <div style="color:#f39c12; font-weight:bold; margin-bottom:5px;">📰 重點新聞</div>
+                <ul style="padding-left:0; list-style:none;">
+                    <li>【公告】聯鈞 2025年11月合併營收6.31億元 年增-19.81%</li><li>【公告】聯鈞更換股務代理機構</li>
+                </ul>
+            </div>
+            
+            <div class="footer">v10.0 (全功能旗艦版)</div>
         </div>
-        
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">7 / 13</div>
-            <div class="stock-id">1605.TW</div>
-            <div class="price" style="color:#ff3333">$33.45</div>
-            <div class="signal">🔥 主力買進</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ 爆量攻擊</li>
-            </ul>
-            <div class="footer">RSI: 64.8 | v8.1 (滑動修復版)</div>
+    
+        <div class="stock-card">
+            <div class="pg-num">7 / 11</div>
+            
+            <div class="top-row">
+                <div>
+                    <h1 class="stock-name">台積電</h1>
+                    <span class="stock-id">2330.TW</span>
+                </div>
+                <div class="tag-ind">半導體業</div>
+            </div>
+            
+            <div class="price-row">
+                <span class="price">$1510.0</span>
+                <span class="change up">+1.0%</span>
+            </div>
+            
+            <div class="range-box">
+                <div class="range-bar">
+                    <div class="range-fill" style="width: 100%"></div>
+                    <div class="range-cursor" style="left: 95.46969744730121%"></div>
+                </div>
+                <div class="range-label">
+                    <span>支撐 $1300.66</span>
+                    <span>壓力 $1519.93</span>
+                </div>
+            </div>
+            
+            <div class="signal-box" style="background: #95a5a620; border-color: #95a5a6; color: #95a5a6">
+                <span>👀 持續觀察</span>
+                <div class="tags">
+                    <span class="tag">多頭排列</span>
+                </div>
+            </div>
+            
+            <div class="grid-box">
+                <div class="grid-item">
+                    <span class="lbl">KD(9,3)</span>
+                    <span class="val">K: 95.0</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">本益比</span>
+                    <span class="val">24.9倍</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">EPS</span>
+                    <span class="val">$60.55</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">法人目標</span>
+                    <span class="val" style="color:#f1c40f">$1768.0382</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">分析建議</span>
+                    <span class="val">強力買進</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">ROE</span>
+                    <span class="val">34.7%</span>
+                </div>
+            </div>
+            
+            <div class="news-area">
+                <div style="color:#f39c12; font-weight:bold; margin-bottom:5px;">📰 重點新聞</div>
+                <ul style="padding-left:0; list-style:none;">
+                    <li>《通網股》是方電訊納入00929成分股 12月29日起生效</li><li>《熱門族群》ASIC需求爆 二線封測廠奮起</li>
+                </ul>
+            </div>
+            
+            <div class="footer">v10.0 (全功能旗艦版)</div>
         </div>
-        
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">8 / 13</div>
-            <div class="stock-id">4989.TW</div>
-            <div class="price" style="color:#ff3333">$47.8</div>
-            <div class="signal">🔥 主力買進</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ 爆量攻擊</li>
-            </ul>
-            <div class="footer">RSI: 65.2 | v8.1 (滑動修復版)</div>
+    
+        <div class="stock-card">
+            <div class="pg-num">8 / 11</div>
+            
+            <div class="top-row">
+                <div>
+                    <h1 class="stock-name">鴻海</h1>
+                    <span class="stock-id">2317.TW</span>
+                </div>
+                <div class="tag-ind">其他電子業</div>
+            </div>
+            
+            <div class="price-row">
+                <span class="price">$225.5</span>
+                <span class="change up">+0.67%</span>
+            </div>
+            
+            <div class="range-box">
+                <div class="range-bar">
+                    <div class="range-fill" style="width: 100%"></div>
+                    <div class="range-cursor" style="left: 36.29032258064516%"></div>
+                </div>
+                <div class="range-label">
+                    <span>支撐 $203.0</span>
+                    <span>壓力 $265.0</span>
+                </div>
+            </div>
+            
+            <div class="signal-box" style="background: #95a5a620; border-color: #95a5a6; color: #95a5a6">
+                <span>👀 持續觀察</span>
+                <div class="tags">
+                    
+                </div>
+            </div>
+            
+            <div class="grid-box">
+                <div class="grid-item">
+                    <span class="lbl">KD(9,3)</span>
+                    <span class="val">K: 52.2</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">本益比</span>
+                    <span class="val">16.8倍</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">EPS</span>
+                    <span class="val">$13.42</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">法人目標</span>
+                    <span class="val" style="color:#f1c40f">$300.05557</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">分析建議</span>
+                    <span class="val">買進</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">ROE</span>
+                    <span class="val">11.8%</span>
+                </div>
+            </div>
+            
+            <div class="news-area">
+                <div style="color:#f39c12; font-weight:bold; margin-bottom:5px;">📰 重點新聞</div>
+                <ul style="padding-left:0; list-style:none;">
+                    <li>鴻勁董事會決議通過參與投標事宜</li><li>【公告】鴻勁製造處長異動</li>
+                </ul>
+            </div>
+            
+            <div class="footer">v10.0 (全功能旗艦版)</div>
         </div>
-        
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">9 / 13</div>
-            <div class="stock-id">6515.TW</div>
-            <div class="price" style="color:#ff3333">$2895.0</div>
-            <div class="signal">🔥 主力買進</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ MA5 黃金交叉</li><li>✔ 爆量攻擊</li>
-            </ul>
-            <div class="footer">RSI: 65.4 | v8.1 (滑動修復版)</div>
+    
+        <div class="stock-card">
+            <div class="pg-num">9 / 11</div>
+            
+            <div class="top-row">
+                <div>
+                    <h1 class="stock-name">南亞科</h1>
+                    <span class="stock-id">2408.TW</span>
+                </div>
+                <div class="tag-ind">半導體業</div>
+            </div>
+            
+            <div class="price-row">
+                <span class="price">$189.0</span>
+                <span class="change up">+0.0%</span>
+            </div>
+            
+            <div class="range-box">
+                <div class="range-bar">
+                    <div class="range-fill" style="width: 100%"></div>
+                    <div class="range-cursor" style="left: 97.89915966386555%"></div>
+                </div>
+                <div class="range-label">
+                    <span>支撐 $72.5</span>
+                    <span>壓力 $191.5</span>
+                </div>
+            </div>
+            
+            <div class="signal-box" style="background: #95a5a620; border-color: #95a5a6; color: #95a5a6">
+                <span>👀 持續觀察</span>
+                <div class="tags">
+                    <span class="tag">多頭排列</span>
+                </div>
+            </div>
+            
+            <div class="grid-box">
+                <div class="grid-item">
+                    <span class="lbl">KD(9,3)</span>
+                    <span class="val">K: 93.2</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">本益比</span>
+                    <span class="val">-</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">EPS</span>
+                    <span class="val">$-1.97</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">法人目標</span>
+                    <span class="val" style="color:#f1c40f">$159.09091</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">分析建議</span>
+                    <span class="val">買進</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">ROE</span>
+                    <span class="val">-3.8%</span>
+                </div>
+            </div>
+            
+            <div class="news-area">
+                <div style="color:#f39c12; font-weight:bold; margin-bottom:5px;">📰 重點新聞</div>
+                <ul style="padding-left:0; list-style:none;">
+                    <li>南亞科納入0050 記憶體族群蓄勢待發</li><li>《台北股市》多頭封關遇亂流 外資轉向加碼、投信累賣近百億</li>
+                </ul>
+            </div>
+            
+            <div class="footer">v10.0 (全功能旗艦版)</div>
         </div>
-        
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">10 / 13</div>
-            <div class="stock-id">3008.TW</div>
-            <div class="price" style="color:#ff3333">$2385.0</div>
-            <div class="signal">🔥 主力買進</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ 爆量攻擊</li>
-            </ul>
-            <div class="footer">RSI: 73.5 | v8.1 (滑動修復版)</div>
+    
+        <div class="stock-card">
+            <div class="pg-num">10 / 11</div>
+            
+            <div class="top-row">
+                <div>
+                    <h1 class="stock-name">華邦電</h1>
+                    <span class="stock-id">2344.TW</span>
+                </div>
+                <div class="tag-ind">半導體業</div>
+            </div>
+            
+            <div class="price-row">
+                <span class="price">$76.5</span>
+                <span class="change down">-0.52%</span>
+            </div>
+            
+            <div class="range-box">
+                <div class="range-bar">
+                    <div class="range-fill" style="width: 100%"></div>
+                    <div class="range-cursor" style="left: 94.36620021003567%"></div>
+                </div>
+                <div class="range-label">
+                    <span>支撐 $32.95</span>
+                    <span>壓力 $79.1</span>
+                </div>
+            </div>
+            
+            <div class="signal-box" style="background: #95a5a620; border-color: #95a5a6; color: #95a5a6">
+                <span>👀 持續觀察</span>
+                <div class="tags">
+                    <span class="tag">多頭排列</span>
+                </div>
+            </div>
+            
+            <div class="grid-box">
+                <div class="grid-item">
+                    <span class="lbl">KD(9,3)</span>
+                    <span class="val">K: 83.3</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">本益比</span>
+                    <span class="val">-</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">EPS</span>
+                    <span class="val">$-0.03</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">法人目標</span>
+                    <span class="val" style="color:#f1c40f">$81.7</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">分析建議</span>
+                    <span class="val">買進</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">ROE</span>
+                    <span class="val">-0.6%</span>
+                </div>
+            </div>
+            
+            <div class="news-area">
+                <div style="color:#f39c12; font-weight:bold; margin-bottom:5px;">📰 重點新聞</div>
+                <ul style="padding-left:0; list-style:none;">
+                    <li>《台北股市》三大法人26日賣超股：力積電、華邦電、群創</li><li>12/26上市投信賣超排行前20名</li>
+                </ul>
+            </div>
+            
+            <div class="footer">v10.0 (全功能旗艦版)</div>
         </div>
-        
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">11 / 13</div>
-            <div class="stock-id">3006.TW</div>
-            <div class="price" style="color:#ff3333">$105.0</div>
-            <div class="signal">🔥 主力買進</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ 爆量攻擊</li>
-            </ul>
-            <div class="footer">RSI: 77.0 | v8.1 (滑動修復版)</div>
+    
+        <div class="stock-card">
+            <div class="pg-num">11 / 11</div>
+            
+            <div class="top-row">
+                <div>
+                    <h1 class="stock-name">力積電</h1>
+                    <span class="stock-id">6770.TW</span>
+                </div>
+                <div class="tag-ind">半導體業</div>
+            </div>
+            
+            <div class="price-row">
+                <span class="price">$40.05</span>
+                <span class="change down">-0.87%</span>
+            </div>
+            
+            <div class="range-box">
+                <div class="range-bar">
+                    <div class="range-fill" style="width: 100%"></div>
+                    <div class="range-cursor" style="left: 87.53622746122055%"></div>
+                </div>
+                <div class="range-label">
+                    <span>支撐 $24.95</span>
+                    <span>壓力 $42.2</span>
+                </div>
+            </div>
+            
+            <div class="signal-box" style="background: #95a5a620; border-color: #95a5a6; color: #95a5a6">
+                <span>👀 持續觀察</span>
+                <div class="tags">
+                    <span class="tag">多頭排列</span>
+                </div>
+            </div>
+            
+            <div class="grid-box">
+                <div class="grid-item">
+                    <span class="lbl">KD(9,3)</span>
+                    <span class="val">K: 76.4</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">本益比</span>
+                    <span class="val">-</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">EPS</span>
+                    <span class="val">$-2.08</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">法人目標</span>
+                    <span class="val" style="color:#f1c40f">$33.4</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">分析建議</span>
+                    <span class="val">持有</span>
+                </div>
+                <div class="grid-item">
+                    <span class="lbl">ROE</span>
+                    <span class="val">-10.1%</span>
+                </div>
+            </div>
+            
+            <div class="news-area">
+                <div style="color:#f39c12; font-weight:bold; margin-bottom:5px;">📰 重點新聞</div>
+                <ul style="padding-left:0; list-style:none;">
+                    <li>證交所12/24完成200檔新權證發行申請案審核</li><li>放假前法人先走一波 台積電小漲穩台股軍心/金龍海嘯撂不倒房價 股市成最強靠山/PCB股王台光電帶隊 台燿金像電衝出新天價｜Yahoo財經掃描</li>
+                </ul>
+            </div>
+            
+            <div class="footer">v10.0 (全功能旗艦版)</div>
         </div>
-        
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">12 / 13</div>
-            <div class="stock-id">7769.TW</div>
-            <div class="price" style="color:#ff3333">$3390.0</div>
-            <div class="signal">🔥 主力買進</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ 爆量攻擊</li>
-            </ul>
-            <div class="footer">RSI: 77.5 | v8.1 (滑動修復版)</div>
-        </div>
-        
-        <div class="stock-card" style="background: #0b0e11;">
-            <div class="page-counter">13 / 13</div>
-            <div class="stock-id">3711.TW</div>
-            <div class="price" style="color:#ff3333">$240.5</div>
-            <div class="signal">✨ 觀察</div>
-            <ul class="reasons" style="list-style:none; padding:0;">
-                <li>✔ MA5 黃金交叉</li>
-            </ul>
-            <div class="footer">RSI: 60.6 | v8.1 (滑動修復版)</div>
-        </div>
-        </div></body></html>
+    </div></body></html>
