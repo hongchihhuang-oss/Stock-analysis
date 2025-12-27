@@ -3,253 +3,297 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import ta
-import twstock
 import datetime
 import time
-import random
-
-def get_stock_name(ticker):
-    """
-    利用 twstock 查詢股票中文名稱
-    """
-    try:
-        # 去掉 .TW 或 .TWO，只留數字代號
-        code = ticker.split('.')[0]
-        if code in twstock.codes:
-            return twstock.codes[code].name
-    except:
-        pass
-    return ticker # 如果查不到就回傳代號
+import twstock # 用來查產業類別
 
 def get_volume_leaders():
     """
-    爬取 Yahoo 股市成交量排行
+    爬取 Yahoo 股市人氣排行榜
     """
     print("🕷️ 正在爬取 Yahoo 股市人氣排行榜...")
     leaders = []
-    
     try:
         urls = [
             "https://tw.stock.yahoo.com/rank/turnover?exchange=TAI", 
             "https://tw.stock.yahoo.com/rank/turnover?exchange=TWO"
         ]
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
+        headers = {'User-Agent': 'Mozilla/5.0'}
 
         for url in urls:
             response = requests.get(url, headers=headers)
             soup = BeautifulSoup(response.text, 'html.parser')
             links = soup.find_all('a', href=True)
-            
             for link in links:
                 href = link['href']
                 if "/quote/" in href and (".TW" in href or ".TWO" in href):
                     ticker = href.split("/quote/")[-1]
                     if ticker not in leaders:
                         leaders.append(ticker)
-            
-            print(f"目前已找到 {len(leaders)} 檔熱門股...")
             time.sleep(1)
-
-        return leaders[:150] # 掃描前 150 名
-
+        return leaders[:150] # 掃描前 150 檔
     except Exception as e:
-        print(f"❌ 爬蟲發生錯誤: {e}")
-        return ['2330.TW', '2317.TW', '2603.TW']
+        print(f"❌ 爬蟲錯誤: {e}")
+        return ['2330.TW', '2317.TW']
+
+def get_stock_info(ticker):
+    """
+    取得股票名稱與產業類別 (利用 twstock)
+    """
+    try:
+        code = ticker.split('.')[0] # 去掉 .TW
+        if code in twstock.codes:
+            info = twstock.codes[code]
+            return info.name, info.group # 回傳 (名稱, 產業)
+    except:
+        pass
+    return ticker, "一般產業"
 
 def analyze_stock(ticker):
     try:
-        df = yf.download(ticker, period="6mo", progress=False) # 改抓6個月，讓 MACD 更準
-        
-        if df.empty or len(df) < 35:
-            return None
+        df = yf.download(ticker, period="3mo", progress=False)
+        if df.empty or len(df) < 20: return None
+        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
-        # === 1. 取得基本資訊 ===
-        stock_name = get_stock_name(ticker)
-        
-        # === 2. 計算深度技術指標 ===
-        # A. 均線
+        # 計算指標
         df['MA5'] = df['Close'].rolling(window=5).mean()
         df['MA20'] = df['Close'].rolling(window=20).mean()
         df['Vol_MA5'] = df['Volume'].rolling(window=5).mean()
+        rsi_indicator = ta.momentum.RSIIndicator(close=df['Close'], window=14)
+        df['RSI'] = rsi_indicator.rsi()
         
-        # B. RSI (相對強弱 - 溫度計)
-        rsi_ind = ta.momentum.RSIIndicator(close=df['Close'], window=14)
-        df['RSI'] = rsi_ind.rsi()
-        
-        # C. KD (隨機指標 - 短線買賣點)
-        k_ind = ta.momentum.StochasticOscillator(high=df['High'], low=df['Low'], close=df['Close'], window=9, smooth_window=3)
-        df['K'] = k_ind.stoch()
-        df['D'] = k_ind.stoch_signal()
-        
-        # D. MACD (平滑異同移動平均線 - 波段趨勢)
-        macd = ta.trend.MACD(close=df['Close'])
-        df['MACD'] = macd.macd()
-        df['MACD_Signal'] = macd.macd_signal()
-        df['MACD_Hist'] = macd.macd_diff() # 柱狀圖
-
-        # 取得最新資料
         today = df.iloc[-1]
         yesterday = df.iloc[-2]
-        current_price = round(float(today['Close']), 2)
-        current_rsi = round(float(today['RSI']), 1)
-        current_k = round(float(today['K']), 1)
         
-        # === 🛡️ 過熱保護 ===
-        if current_rsi > 75:
-            return None 
+        # 取得目前數據
+        price = round(float(today['Close']), 2)
+        rsi = round(float(today['RSI']), 1)
+        change = round((today['Close'] - yesterday['Close']) / yesterday['Close'] * 100, 2)
+        
+        # 🛡️ 過熱保護
+        if rsi > 75: return None 
 
-        # === 🧠 深度分析邏輯 ===
-        signal = None
+        # 訊號判斷
+        signal_type = None
         reasons = []
-        score = 0 # 建構一個評分系統 (滿分 5 星)
         
-        # 1. 均線分析
-        if today['Close'] > today['MA20']:
-            score += 1
-            if yesterday['MA5'] < yesterday['MA20'] and today['MA5'] > today['MA20']:
-                reasons.append("MA黃金交叉 (短線轉強)")
-                score += 1
-        
-        # 2. 成交量分析
-        if today['Volume'] > today['Vol_MA5'] * 1.5:
-            reasons.append("爆量 (資金湧入)")
-            score += 1
-
-        # 3. MACD 分析 (趨勢確認)
-        # 柱狀圖由負轉正 (翻紅) 或是 雙線黃金交叉
-        if yesterday['MACD_Hist'] < 0 and today['MACD_Hist'] > 0:
-            reasons.append("MACD翻紅 (波段起漲)")
-            score += 1.5
-        elif yesterday['MACD'] < yesterday['MACD_Signal'] and today['MACD'] > today['MACD_Signal']:
-            reasons.append("MACD交叉 (趨勢向上)")
-            score += 1
-
-        # 4. KD 分析 (買賣點)
-        # K值在低檔 (50以下) 黃金交叉
-        if current_k < 50 and yesterday['K'] < yesterday['D'] and today['K'] > today['D']:
-            reasons.append("KD低檔金叉 (最佳買點)")
-            score += 1.5
-
-        # === 總結訊號 ===
-        # 至少要有兩個好理由才顯示
-        if len(reasons) >= 2 or score >= 3:
-            if score >= 4:
-                signal = "🔥 強力買進"
-            elif "爆量" in reasons and "MACD" in str(reasons):
-                signal = "🚀 量滾量上攻"
-            else:
-                signal = "🧐 值得關注"
-                
-            # 格式化輸出細節
-            analysis_text = f"• RSI指標: {current_rsi} (安全)<br>"
-            analysis_text += f"• KD數值: K({current_k})<br>"
-            analysis_text += "• 觸發訊號: " + "、".join(reasons)
-
-            return {
-                "Code": ticker,
-                "Name": stock_name,
-                "Price": current_price,
-                "Signal": signal,
-                "Score": score,
-                "Details": analysis_text
-            }
-        
-        return None
+        if yesterday['MA5'] < yesterday['MA20'] and today['MA5'] > today['MA20']:
+            reasons.append("MA5 穿過 MA20 黃金交叉")
             
-    except Exception as e:
+        if today['Volume'] > today['Vol_MA5'] * 1.5:
+            reasons.append(f"成交量爆增 (是 5日均量的 {round(today['Volume']/today['Vol_MA5'], 1)} 倍)")
+            
+        if today['Close'] > today['MA20']:
+            reasons.append("股價站穩月線之上")
+
+        # 綜合篩選
+        if "黃金交叉" in str(reasons) or ("成交量爆增" in str(reasons) and price > today['MA20']):
+            signal_type = "✨ 值得關注"
+            if "成交量爆增" in str(reasons) and "黃金交叉" in str(reasons):
+                signal_type = "🔥 強力買進訊號"
+        
+        if signal_type:
+            name, industry = get_stock_info(ticker)
+            return {
+                "id": ticker,
+                "name": name,
+                "industry": industry,
+                "price": price,
+                "change": change,
+                "rsi": rsi,
+                "signal": signal_type,
+                "reasons": reasons
+            }
+        return None
+    except:
         return None
 
-# === 主程式 ===
+# === 執行分析 ===
 stock_list = get_volume_leaders()
-print(f"共取得 {len(stock_list)} 檔人氣股票，開始深度分析...")
-
 results = []
+print(f"開始掃描 {len(stock_list)} 檔股票...")
+
 for i, stock in enumerate(stock_list):
-    if i % 10 == 0:
-        print(f"進度: {i}/{len(stock_list)}...")
     res = analyze_stock(stock)
     if res:
         results.append(res)
 
-# 排序: 分數高的排前面
-results.sort(key=lambda x: x['Score'], reverse=True)
+# 排序
+results.sort(key=lambda x: (x['signal'] != "🔥 強力買進訊號", x['rsi']))
 
-# 產出 HTML
+# === 產出 APP 風格 HTML ===
 html_content = f"""
-<html>
+<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 深度選股報告 📊</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Stock Swipe</title>
     <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; background-color: #f0f2f5; }}
-        .container {{ max-width: 800px; margin: 0 auto; }}
-        h1 {{ text-align: center; color: #1a1a1a; }}
-        .summary {{ text-align: center; color: #666; margin-bottom: 30px; background: #fff; padding: 15px; border-radius: 10px; }}
-        .card {{ background: white; padding: 20px; margin-bottom: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: relative; overflow: hidden; }}
-        .card::before {{ content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; }}
-        .card.score-high::before {{ background-color: #d9534f; }} /* 高分紅條 */
-        .card.score-mid::before {{ background-color: #f0ad4e; }} /* 中分橘條 */
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{ 
+            background-color: #000; 
+            color: #fff; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden; /* 禁止網頁整體滾動 */
+        }}
         
-        .header {{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
-        .stock-info {{ display: flex; align-items: baseline; gap: 10px; }}
-        .stock-name {{ font-size: 1.4em; font-weight: bold; color: #333; }}
-        .stock-code {{ font-size: 0.9em; color: #888; }}
-        .price {{ font-size: 1.5em; font-weight: bold; color: #333; }}
+        /* 核心：單頁滑動容器 */
+        .snap-container {{
+            height: 100vh;
+            width: 100vw;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+        }}
+
+        /* 每一張卡片 */
+        .stock-card {{
+            height: 100vh;
+            width: 100vw;
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 30px;
+            position: relative;
+            background: linear-gradient(180deg, #1a1a1a 0%, #000000 100%);
+            border-bottom: 1px solid #333;
+        }}
+
+        /* 產業標籤 */
+        .industry-badge {{
+            position: absolute;
+            top: 40px;
+            right: 30px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            backdrop-filter: blur(5px);
+        }}
+
+        /* 股票代號與名稱 */
+        .stock-header h1 {{ font-size: 2.5em; margin-bottom: 5px; }}
+        .stock-header h2 {{ font-size: 1.2em; color: #aaa; font-weight: normal; margin-bottom: 20px; }}
+
+        /* 股價 */
+        .price-box {{ margin-bottom: 30px; }}
+        .price {{ font-size: 3.5em; font-weight: 800; letter-spacing: -1px; }}
+        .change {{ font-size: 1.2em; font-weight: bold; margin-left: 10px; }}
+        .up {{ color: #ff4d4d; }} /* 台股漲是紅色 */
+        .down {{ color: #00b894; }}
+
+        /* 訊號與理由 */
+        .signal-box {{ 
+            background: rgba(255,255,255,0.1); 
+            padding: 20px; 
+            border-radius: 16px; 
+            backdrop-filter: blur(10px);
+        }}
+        .signal-title {{ 
+            font-size: 1.2em; 
+            font-weight: bold; 
+            margin-bottom: 15px; 
+            color: #f1c40f; 
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }}
+        .reason-list {{ list-style: none; }}
+        .reason-list li {{ 
+            margin-bottom: 10px; 
+            padding-left: 20px; 
+            position: relative; 
+            font-size: 1.1em;
+            line-height: 1.4;
+        }}
+        .reason-list li::before {{
+            content: "✔";
+            color: #00b894;
+            position: absolute;
+            left: 0;
+            top: 2px;
+        }}
+
+        /* 底部資訊 */
+        .footer-info {{
+            position: absolute;
+            bottom: 40px;
+            left: 30px;
+            right: 30px;
+            display: flex;
+            justify-content: space-between;
+            color: #666;
+            font-size: 0.9em;
+        }}
         
-        .signal-badge {{ display: inline-block; padding: 5px 12px; border-radius: 20px; color: white; font-weight: bold; font-size: 0.9em; transform: translateY(-2px); }}
-        .bg-red {{ background: linear-gradient(45deg, #e74c3c, #c0392b); box-shadow: 0 2px 5px rgba(231, 76, 60, 0.3); }}
-        .bg-orange {{ background-color: #f39c12; }}
-        
-        .analysis-box {{ background-color: #f8f9fa; padding: 15px; border-radius: 8px; color: #555; line-height: 1.6; font-size: 0.95em; }}
-        .score-star {{ color: #f1c40f; font-size: 1.2em; margin-left: auto; }}
+        .rsi-val {{ color: #aaa; }}
+
+        /* 提示滑動 */
+        .swipe-hint {{
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #444;
+            font-size: 0.8em;
+            animation: bounce 2s infinite;
+        }}
+        @keyframes bounce {{
+            0%, 20%, 50%, 80%, 100% {{transform: translateX(-50%) translateY(0);}}
+            40% {{transform: translateX(-50%) translateY(-10px);}}
+            60% {{transform: translateX(-50%) translateY(-5px);}}
+        }}
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📊 AI 深度選股報告</h1>
-        <div class="summary">
-            <b>今日掃描重點</b><br>
-            成交量前 {len(stock_list)} 大熱門股｜濾除高風險 (RSI>75)<br>
-            更新時間: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-        </div>
+    <div class="snap-container">
 """
 
 if not results:
-    html_content += "<div style='text-align:center; padding:50px;'>😴 今日大盤震盪，AI 建議多看少做，暫無高分標的。</div>"
+    html_content += """
+        <div class="stock-card" style="align-items: center; text-align: center;">
+            <h1 style="color: #666;">😴 今日無訊號</h1>
+            <p style="color: #444; margin-top: 10px;">目前市場過熱或無符合條件個股<br>請明日再試</p>
+        </div>
+    """
 else:
     for item in results:
-        # 決定卡片樣式
-        score_class = "score-mid"
-        badge_class = "bg-orange"
-        stars = "⭐" * int(item['Score'])
+        change_color = "up" if item['change'] >= 0 else "down"
+        sign = "+" if item['change'] >= 0 else ""
         
-        if item['Score'] >= 4:
-            score_class = "score-high"
-            badge_class = "bg-red"
-        
+        # 產生理由列表 HTML
+        reasons_html = ""
+        for r in item['reasons']:
+            reasons_html += f"<li>{r}</li>"
+            
         html_content += f"""
-        <div class="card {score_class}">
-            <div class="header">
-                <div class="stock-info">
-                    <span class="stock-name">{item['Name']}</span>
-                    <span class="stock-code">{item['Code']}</span>
-                    <span class="signal-badge {badge_class}">{item['Signal']}</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span class="score-star">{stars}</span>
-                    <span class="price">${item['Price']}</span>
-                </div>
+        <div class="stock-card">
+            <div class="industry-badge">{item['industry']}</div>
+            
+            <div class="stock-header">
+                <h1>{item['name']}</h1>
+                <h2>{item['id']}</h2>
             </div>
-            <div class="analysis-box">
-                {item['Details']}
+            
+            <div class="price-box">
+                <span class="price">${item['price']}</span>
+                <span class="change {change_color}">{sign}{item['change']}%</span>
             </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">{item['signal']}</div>
+                <ul class="reason-list">
+                    {reasons_html}
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: {item['rsi']}</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
         </div>
         """
 

@@ -1,227 +1,1192 @@
 
-<html>
+<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 深度選股報告 📊</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Stock Swipe</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; background-color: #f0f2f5; }
-        .container { max-width: 800px; margin: 0 auto; }
-        h1 { text-align: center; color: #1a1a1a; }
-        .summary { text-align: center; color: #666; margin-bottom: 30px; background: #fff; padding: 15px; border-radius: 10px; }
-        .card { background: white; padding: 20px; margin-bottom: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: relative; overflow: hidden; }
-        .card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; }
-        .card.score-high::before { background-color: #d9534f; } /* 高分紅條 */
-        .card.score-mid::before { background-color: #f0ad4e; } /* 中分橘條 */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background-color: #000; 
+            color: #fff; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden; /* 禁止網頁整體滾動 */
+        }
         
-        .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        .stock-info { display: flex; align-items: baseline; gap: 10px; }
-        .stock-name { font-size: 1.4em; font-weight: bold; color: #333; }
-        .stock-code { font-size: 0.9em; color: #888; }
-        .price { font-size: 1.5em; font-weight: bold; color: #333; }
+        /* 核心：單頁滑動容器 */
+        .snap-container {
+            height: 100vh;
+            width: 100vw;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+        }
+
+        /* 每一張卡片 */
+        .stock-card {
+            height: 100vh;
+            width: 100vw;
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 30px;
+            position: relative;
+            background: linear-gradient(180deg, #1a1a1a 0%, #000000 100%);
+            border-bottom: 1px solid #333;
+        }
+
+        /* 產業標籤 */
+        .industry-badge {
+            position: absolute;
+            top: 40px;
+            right: 30px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            backdrop-filter: blur(5px);
+        }
+
+        /* 股票代號與名稱 */
+        .stock-header h1 { font-size: 2.5em; margin-bottom: 5px; }
+        .stock-header h2 { font-size: 1.2em; color: #aaa; font-weight: normal; margin-bottom: 20px; }
+
+        /* 股價 */
+        .price-box { margin-bottom: 30px; }
+        .price { font-size: 3.5em; font-weight: 800; letter-spacing: -1px; }
+        .change { font-size: 1.2em; font-weight: bold; margin-left: 10px; }
+        .up { color: #ff4d4d; } /* 台股漲是紅色 */
+        .down { color: #00b894; }
+
+        /* 訊號與理由 */
+        .signal-box { 
+            background: rgba(255,255,255,0.1); 
+            padding: 20px; 
+            border-radius: 16px; 
+            backdrop-filter: blur(10px);
+        }
+        .signal-title { 
+            font-size: 1.2em; 
+            font-weight: bold; 
+            margin-bottom: 15px; 
+            color: #f1c40f; 
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .reason-list { list-style: none; }
+        .reason-list li { 
+            margin-bottom: 10px; 
+            padding-left: 20px; 
+            position: relative; 
+            font-size: 1.1em;
+            line-height: 1.4;
+        }
+        .reason-list li::before {
+            content: "✔";
+            color: #00b894;
+            position: absolute;
+            left: 0;
+            top: 2px;
+        }
+
+        /* 底部資訊 */
+        .footer-info {
+            position: absolute;
+            bottom: 40px;
+            left: 30px;
+            right: 30px;
+            display: flex;
+            justify-content: space-between;
+            color: #666;
+            font-size: 0.9em;
+        }
         
-        .signal-badge { display: inline-block; padding: 5px 12px; border-radius: 20px; color: white; font-weight: bold; font-size: 0.9em; transform: translateY(-2px); }
-        .bg-red { background: linear-gradient(45deg, #e74c3c, #c0392b); box-shadow: 0 2px 5px rgba(231, 76, 60, 0.3); }
-        .bg-orange { background-color: #f39c12; }
-        
-        .analysis-box { background-color: #f8f9fa; padding: 15px; border-radius: 8px; color: #555; line-height: 1.6; font-size: 0.95em; }
-        .score-star { color: #f1c40f; font-size: 1.2em; margin-left: auto; }
+        .rsi-val { color: #aaa; }
+
+        /* 提示滑動 */
+        .swipe-hint {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #444;
+            font-size: 0.8em;
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {transform: translateX(-50%) translateY(0);}
+            40% {transform: translateX(-50%) translateY(-10px);}
+            60% {transform: translateX(-50%) translateY(-5px);}
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📊 AI 深度選股報告</h1>
-        <div class="summary">
-            <b>今日掃描重點</b><br>
-            成交量前 150 大熱門股｜濾除高風險 (RSI>75)<br>
-            更新時間: 2025-12-27 02:17:54
-        </div>
+    <div class="snap-container">
 
-        <div class="card score-high">
-            <div class="header">
-                <div class="stock-info">
-                    <span class="stock-name">聖暉*</span>
-                    <span class="stock-code">5536.TWO</span>
-                    <span class="signal-badge bg-red">🔥 強力買進</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span class="score-star">⭐⭐⭐⭐⭐</span>
-                    <span class="price">$791.0</span>
-                </div>
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>愛普*</h1>
+                <h2>6531.TW</h2>
             </div>
-            <div class="analysis-box">
-                • RSI指標: 57.4 (安全)<br>• KD數值: K(43.0)<br>• 觸發訊號: 爆量 (資金湧入)、MACD翻紅 (波段起漲)、KD低檔金叉 (最佳買點)
+            
+            <div class="price-box">
+                <span class="price">$412.0</span>
+                <span class="change down">-1.32%</span>
             </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">🔥 強力買進訊號</div>
+                <ul class="reason-list">
+                    <li>MA5 穿過 MA20 黃金交叉</li><li>成交量爆增 (是 5日均量的 1.9 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 56.9</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
         </div>
         
-        <div class="card score-mid">
-            <div class="header">
-                <div class="stock-info">
-                    <span class="stock-name">至上</span>
-                    <span class="stock-code">8112.TW</span>
-                    <span class="signal-badge bg-orange">🧐 值得關注</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span class="score-star">⭐⭐⭐</span>
-                    <span class="price">$75.3</span>
-                </div>
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>穎崴</h1>
+                <h2>6515.TW</h2>
             </div>
-            <div class="analysis-box">
-                • RSI指標: 59.4 (安全)<br>• KD數值: K(76.3)<br>• 觸發訊號: 爆量 (資金湧入)、MACD翻紅 (波段起漲)
+            
+            <div class="price-box">
+                <span class="price">$2895.0</span>
+                <span class="change up">+9.87%</span>
             </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">🔥 強力買進訊號</div>
+                <ul class="reason-list">
+                    <li>MA5 穿過 MA20 黃金交叉</li><li>成交量爆增 (是 5日均量的 2.3 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 65.4</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
         </div>
         
-        <div class="card score-mid">
-            <div class="header">
-                <div class="stock-info">
-                    <span class="stock-name">富世達</span>
-                    <span class="stock-code">6805.TW</span>
-                    <span class="signal-badge bg-orange">🧐 值得關注</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span class="score-star">⭐⭐⭐</span>
-                    <span class="price">$1605.0</span>
-                </div>
+        <div class="stock-card">
+            <div class="industry-badge"></div>
+            
+            <div class="stock-header">
+                <h1>富邦科技</h1>
+                <h2>0052.TW</h2>
             </div>
-            <div class="analysis-box">
-                • RSI指標: 59.2 (安全)<br>• KD數值: K(83.7)<br>• 觸發訊號: MA黃金交叉 (短線轉強)、MACD翻紅 (波段起漲)
+            
+            <div class="price-box">
+                <span class="price">$36.89</span>
+                <span class="change up">+0.93%</span>
             </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>MA5 穿過 MA20 黃金交叉</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 12.5</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
         </div>
         
-        <div class="card score-mid">
-            <div class="header">
-                <div class="stock-info">
-                    <span class="stock-name">緯創</span>
-                    <span class="stock-code">3231.TW</span>
-                    <span class="signal-badge bg-orange">🧐 值得關注</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span class="score-star">⭐⭐⭐</span>
-                    <span class="price">$146.5</span>
-                </div>
+        <div class="stock-card">
+            <div class="industry-badge">電機機械</div>
+            
+            <div class="stock-header">
+                <h1>東元</h1>
+                <h2>1504.TW</h2>
             </div>
-            <div class="analysis-box">
-                • RSI指標: 55.4 (安全)<br>• KD數值: K(85.0)<br>• 觸發訊號: MA黃金交叉 (短線轉強)、MACD翻紅 (波段起漲)
+            
+            <div class="price-box">
+                <span class="price">$86.5</span>
+                <span class="change up">+0.23%</span>
             </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>MA5 穿過 MA20 黃金交叉</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 44.6</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
         </div>
         
-        <div class="card score-mid">
-            <div class="header">
-                <div class="stock-info">
-                    <span class="stock-name">第一銅</span>
-                    <span class="stock-code">2009.TW</span>
-                    <span class="signal-badge bg-orange">🧐 值得關注</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span class="score-star">⭐⭐⭐</span>
-                    <span class="price">$49.5</span>
-                </div>
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>環球晶</h1>
+                <h2>6488.TWO</h2>
             </div>
-            <div class="analysis-box">
-                • RSI指標: 69.4 (安全)<br>• KD數值: K(100.0)<br>• 觸發訊號: 爆量 (資金湧入)、MACD翻紅 (波段起漲)
+            
+            <div class="price-box">
+                <span class="price">$391.0</span>
+                <span class="change up">+2.36%</span>
             </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>MA5 穿過 MA20 黃金交叉</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 51.4</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
         </div>
         
-        <div class="card score-mid">
-            <div class="header">
-                <div class="stock-info">
-                    <span class="stock-name">華榮</span>
-                    <span class="stock-code">1608.TW</span>
-                    <span class="signal-badge bg-orange">🧐 值得關注</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span class="score-star">⭐⭐⭐</span>
-                    <span class="price">$39.5</span>
-                </div>
+        <div class="stock-card">
+            <div class="industry-badge">電腦及週邊設備業</div>
+            
+            <div class="stock-header">
+                <h1>緯創</h1>
+                <h2>3231.TW</h2>
             </div>
-            <div class="analysis-box">
-                • RSI指標: 67.3 (安全)<br>• KD數值: K(84.6)<br>• 觸發訊號: 爆量 (資金湧入)、MACD翻紅 (波段起漲)
+            
+            <div class="price-box">
+                <span class="price">$146.5</span>
+                <span class="change up">+0.69%</span>
             </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>MA5 穿過 MA20 黃金交叉</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 55.3</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
         </div>
         
-        <div class="card score-mid">
-            <div class="header">
-                <div class="stock-info">
-                    <span class="stock-name">欣銓</span>
-                    <span class="stock-code">3264.TWO</span>
-                    <span class="signal-badge bg-orange">🧐 值得關注</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span class="score-star">⭐⭐⭐</span>
-                    <span class="price">$102.0</span>
-                </div>
+        <div class="stock-card">
+            <div class="industry-badge">電子通路業</div>
+            
+            <div class="stock-header">
+                <h1>擎亞</h1>
+                <h2>8096.TWO</h2>
             </div>
-            <div class="analysis-box">
-                • RSI指標: 68.4 (安全)<br>• KD數值: K(100.0)<br>• 觸發訊號: 爆量 (資金湧入)、MACD翻紅 (波段起漲)
+            
+            <div class="price-box">
+                <span class="price">$52.0</span>
+                <span class="change up">+4.0%</span>
             </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 2.3 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 55.4</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
         </div>
         
-        <div class="card score-mid">
-            <div class="header">
-                <div class="stock-info">
-                    <span class="stock-name">擎亞</span>
-                    <span class="stock-code">8096.TWO</span>
-                    <span class="signal-badge bg-orange">🧐 值得關注</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span class="score-star">⭐⭐⭐</span>
-                    <span class="price">$52.0</span>
-                </div>
+        <div class="stock-card">
+            <div class="industry-badge"></div>
+            
+            <div class="stock-header">
+                <h1>群益ESG投等債20+</h1>
+                <h2>00937B.TWO</h2>
             </div>
-            <div class="analysis-box">
-                • RSI指標: 55.3 (安全)<br>• KD數值: K(75.0)<br>• 觸發訊號: 爆量 (資金湧入)、MACD翻紅 (波段起漲)
+            
+            <div class="price-box">
+                <span class="price">$15.1</span>
+                <span class="change up">+0.2%</span>
             </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>MA5 穿過 MA20 黃金交叉</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 56.1</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
         </div>
         
-        <div class="card score-mid">
-            <div class="header">
-                <div class="stock-info">
-                    <span class="stock-name">穎崴</span>
-                    <span class="stock-code">6515.TW</span>
-                    <span class="signal-badge bg-orange">🧐 值得關注</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span class="score-star">⭐⭐⭐</span>
-                    <span class="price">$2895.0</span>
-                </div>
+        <div class="stock-card">
+            <div class="industry-badge">其他電子業</div>
+            
+            <div class="stock-header">
+                <h1>聖暉*</h1>
+                <h2>5536.TWO</h2>
             </div>
-            <div class="analysis-box">
-                • RSI指標: 65.5 (安全)<br>• KD數值: K(100.0)<br>• 觸發訊號: MA黃金交叉 (短線轉強)、爆量 (資金湧入)
+            
+            <div class="price-box">
+                <span class="price">$791.0</span>
+                <span class="change up">+5.19%</span>
             </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.7 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 57.6</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
         </div>
         
-        <div class="card score-mid">
-            <div class="header">
-                <div class="stock-info">
-                    <span class="stock-name">愛普*</span>
-                    <span class="stock-code">6531.TW</span>
-                    <span class="signal-badge bg-orange">🧐 值得關注</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span class="score-star">⭐⭐⭐</span>
-                    <span class="price">$412.0</span>
-                </div>
+        <div class="stock-card">
+            <div class="industry-badge">其他電子業</div>
+            
+            <div class="stock-header">
+                <h1>弘塑</h1>
+                <h2>3131.TWO</h2>
             </div>
-            <div class="analysis-box">
-                • RSI指標: 56.8 (安全)<br>• KD數值: K(69.9)<br>• 觸發訊號: MA黃金交叉 (短線轉強)、爆量 (資金湧入)
+            
+            <div class="price-box">
+                <span class="price">$1535.0</span>
+                <span class="change up">+1.99%</span>
             </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>MA5 穿過 MA20 黃金交叉</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 59.2</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
         </div>
         
-        <div class="card score-mid">
-            <div class="header">
-                <div class="stock-info">
-                    <span class="stock-name">雍智科技</span>
-                    <span class="stock-code">6683.TWO</span>
-                    <span class="signal-badge bg-orange">🧐 值得關注</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <span class="score-star">⭐⭐</span>
-                    <span class="price">$421.0</span>
-                </div>
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>品安</h1>
+                <h2>8088.TWO</h2>
             </div>
-            <div class="analysis-box">
-                • RSI指標: 50.3 (安全)<br>• KD數值: K(39.0)<br>• 觸發訊號: 爆量 (資金湧入)、KD低檔金叉 (最佳買點)
+            
+            <div class="price-box">
+                <span class="price">$44.65</span>
+                <span class="change up">+3.0%</span>
             </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 2.1 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 59.2</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">電子零組件業</div>
+            
+            <div class="stock-header">
+                <h1>富世達</h1>
+                <h2>6805.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$1605.0</span>
+                <span class="change up">+1.26%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>MA5 穿過 MA20 黃金交叉</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 59.3</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>景碩</h1>
+                <h2>3189.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$153.0</span>
+                <span class="change up">+6.25%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.7 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 59.4</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">電子通路業</div>
+            
+            <div class="stock-header">
+                <h1>至上</h1>
+                <h2>8112.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$75.3</span>
+                <span class="change up">+1.35%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.6 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 59.4</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>日月光投控</h1>
+                <h2>3711.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$240.5</span>
+                <span class="change up">+2.56%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>MA5 穿過 MA20 黃金交叉</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 60.6</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">電子零組件業</div>
+            
+            <div class="stock-header">
+                <h1>建榮</h1>
+                <h2>5340.TWO</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$67.1</span>
+                <span class="change up">+3.71%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 2.4 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 61.1</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>旺矽</h1>
+                <h2>6223.TWO</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$2360.0</span>
+                <span class="change up">+2.39%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.9 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 61.4</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge"></div>
+            
+            <div class="stock-header">
+                <h1>富邦台50</h1>
+                <h2>006208.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$147.55</span>
+                <span class="change up">+0.85%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.7 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 62.0</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>鈺創</h1>
+                <h2>5351.TWO</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$43.8</span>
+                <span class="change up">+5.67%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.9 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 62.4</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>力成</h1>
+                <h2>6239.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$175.0</span>
+                <span class="change up">+6.38%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.8 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 62.8</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">光電業</div>
+            
+            <div class="stock-header">
+                <h1>立碁</h1>
+                <h2>8111.TWO</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$75.8</span>
+                <span class="change down">-2.07%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 2.8 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 64.2</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">電機機械</div>
+            
+            <div class="stock-header">
+                <h1>大量</h1>
+                <h2>3167.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$240.0</span>
+                <span class="change up">+7.14%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.7 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 64.4</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>南茂</h1>
+                <h2>8150.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$48.0</span>
+                <span class="change up">+5.03%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 2.0 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 64.5</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>矽格</h1>
+                <h2>6257.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$109.5</span>
+                <span class="change up">+8.42%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 2.0 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 64.7</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">電器電纜</div>
+            
+            <div class="stock-header">
+                <h1>華新</h1>
+                <h2>1605.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$33.45</span>
+                <span class="change up">+5.69%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 2.1 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 64.8</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">電子零組件業</div>
+            
+            <div class="stock-header">
+                <h1>榮科</h1>
+                <h2>4989.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$47.8</span>
+                <span class="change up">+4.14%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 2.7 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 65.2</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">電子零組件業</div>
+            
+            <div class="stock-header">
+                <h1>蜜望實</h1>
+                <h2>8043.TWO</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$90.0</span>
+                <span class="change up">+1.81%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>MA5 穿過 MA20 黃金交叉</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 65.2</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">電子零組件業</div>
+            
+            <div class="stock-header">
+                <h1>富喬</h1>
+                <h2>1815.TWO</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$92.6</span>
+                <span class="change up">+1.42%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.6 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 66.7</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">電器電纜</div>
+            
+            <div class="stock-header">
+                <h1>華榮</h1>
+                <h2>1608.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$39.5</span>
+                <span class="change up">+6.61%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 3.3 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 67.4</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>欣銓</h1>
+                <h2>3264.TWO</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$102.0</span>
+                <span class="change up">+9.56%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 2.5 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 68.5</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>華泰</h1>
+                <h2>2329.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$56.6</span>
+                <span class="change up">+9.9%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.9 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 68.6</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>威剛</h1>
+                <h2>3260.TWO</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$221.5</span>
+                <span class="change down">-0.89%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.6 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 69.1</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">鋼鐵工業</div>
+            
+            <div class="stock-header">
+                <h1>第一銅</h1>
+                <h2>2009.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$49.5</span>
+                <span class="change up">+10.0%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 2.5 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 69.3</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">綠能環保</div>
+            
+            <div class="stock-header">
+                <h1>可寧衛</h1>
+                <h2>8422.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$26.65</span>
+                <span class="change up">+8.78%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.7 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 70.2</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>精測</h1>
+                <h2>6510.TWO</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$2400.0</span>
+                <span class="change up">+5.96%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.8 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 70.7</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">電子零組件業</div>
+            
+            <div class="stock-header">
+                <h1>湧德</h1>
+                <h2>3689.TWO</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$115.0</span>
+                <span class="change up">+3.6%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.8 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 71.8</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">半導體業</div>
+            
+            <div class="stock-header">
+                <h1>台星科</h1>
+                <h2>3265.TWO</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$122.5</span>
+                <span class="change up">+3.38%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.7 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 72.0</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="industry-badge">光電業</div>
+            
+            <div class="stock-header">
+                <h1>大立光</h1>
+                <h2>3008.TW</h2>
+            </div>
+            
+            <div class="price-box">
+                <span class="price">$2385.0</span>
+                <span class="change up">+6.0%</span>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-title">✨ 值得關注</div>
+                <ul class="reason-list">
+                    <li>成交量爆增 (是 5日均量的 1.8 倍)</li><li>股價站穩月線之上</li>
+                </ul>
+            </div>
+            
+            <div class="footer-info">
+                <span class="rsi-val">RSI 強度: 73.5</span>
+                <span>AI 偵測</span>
+            </div>
+            
+            <div class="swipe-hint">往上滑動看下一檔 ▲</div>
         </div>
         
     </div>
