@@ -3,21 +3,35 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import ta
+import twstock
 import datetime
 import time
 import random
 
+def get_stock_name(ticker):
+    """
+    利用 twstock 查詢股票中文名稱
+    """
+    try:
+        # 去掉 .TW 或 .TWO，只留數字代號
+        code = ticker.split('.')[0]
+        if code in twstock.codes:
+            return twstock.codes[code].name
+    except:
+        pass
+    return ticker # 如果查不到就回傳代號
+
 def get_volume_leaders():
     """
-    爬取 Yahoo 股市「成交量排行榜」的前 150 名股票
+    爬取 Yahoo 股市成交量排行
     """
     print("🕷️ 正在爬取 Yahoo 股市人氣排行榜...")
     leaders = []
     
     try:
         urls = [
-            "https://tw.stock.yahoo.com/rank/turnover?exchange=TAI", # 上市
-            "https://tw.stock.yahoo.com/rank/turnover?exchange=TWO"  # 上櫃
+            "https://tw.stock.yahoo.com/rank/turnover?exchange=TAI", 
+            "https://tw.stock.yahoo.com/rank/turnover?exchange=TWO"
         ]
         
         headers = {
@@ -39,75 +53,111 @@ def get_volume_leaders():
             print(f"目前已找到 {len(leaders)} 檔熱門股...")
             time.sleep(1)
 
-        return leaders[:150]
+        return leaders[:150] # 掃描前 150 名
 
     except Exception as e:
         print(f"❌ 爬蟲發生錯誤: {e}")
-        return ['2330.TW', '2317.TW', '2454.TW'] # 發生錯誤時的備用清單
+        return ['2330.TW', '2317.TW', '2603.TW']
 
 def analyze_stock(ticker):
     try:
-        # 下載資料
-        df = yf.download(ticker, period="3mo", progress=False)
+        df = yf.download(ticker, period="6mo", progress=False) # 改抓6個月，讓 MACD 更準
         
-        if df.empty or len(df) < 20:
+        if df.empty or len(df) < 35:
             return None
 
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
-        # === 計算技術指標 ===
-        # 1. 均線與成交量
+        # === 1. 取得基本資訊 ===
+        stock_name = get_stock_name(ticker)
+        
+        # === 2. 計算深度技術指標 ===
+        # A. 均線
         df['MA5'] = df['Close'].rolling(window=5).mean()
         df['MA20'] = df['Close'].rolling(window=20).mean()
         df['Vol_MA5'] = df['Volume'].rolling(window=5).mean()
         
-        # 2. RSI 指標 (溫度計)
-        # 使用 ta 套件計算 RSI，參數通常設 14 天
-        rsi_indicator = ta.momentum.RSIIndicator(close=df['Close'], window=14)
-        df['RSI'] = rsi_indicator.rsi()
+        # B. RSI (相對強弱 - 溫度計)
+        rsi_ind = ta.momentum.RSIIndicator(close=df['Close'], window=14)
+        df['RSI'] = rsi_ind.rsi()
         
+        # C. KD (隨機指標 - 短線買賣點)
+        k_ind = ta.momentum.StochasticOscillator(high=df['High'], low=df['Low'], close=df['Close'], window=9, smooth_window=3)
+        df['K'] = k_ind.stoch()
+        df['D'] = k_ind.stoch_signal()
+        
+        # D. MACD (平滑異同移動平均線 - 波段趨勢)
+        macd = ta.trend.MACD(close=df['Close'])
+        df['MACD'] = macd.macd()
+        df['MACD_Signal'] = macd.macd_signal()
+        df['MACD_Hist'] = macd.macd_diff() # 柱狀圖
+
+        # 取得最新資料
         today = df.iloc[-1]
         yesterday = df.iloc[-2]
         current_price = round(float(today['Close']), 2)
         current_rsi = round(float(today['RSI']), 1)
+        current_k = round(float(today['K']), 1)
         
-        # === 🛡️ 過熱保護機制 🛡️ ===
-        # 如果 RSI > 75，代表已經過熱，直接過濾掉，不看它了
+        # === 🛡️ 過熱保護 ===
         if current_rsi > 75:
-            # 這裡我們選擇直接回傳 None (跳過)，或是你可以選擇回傳一個「過熱警告」
-            # 為了安全起見，我們這裡直接跳過，不讓它出現在清單上誘惑你
             return None 
 
-        # === 進場邏輯判斷 ===
+        # === 🧠 深度分析邏輯 ===
         signal = None
         reasons = []
+        score = 0 # 建構一個評分系統 (滿分 5 星)
         
-        # 條件 A: 黃金交叉
-        if yesterday['MA5'] < yesterday['MA20'] and today['MA5'] > today['MA20']:
-            reasons.append("黃金交叉")
-            
-        # 條件 B: 爆量 (今天量 > 5日均量 1.5 倍)
+        # 1. 均線分析
+        if today['Close'] > today['MA20']:
+            score += 1
+            if yesterday['MA5'] < yesterday['MA20'] and today['MA5'] > today['MA20']:
+                reasons.append("MA黃金交叉 (短線轉強)")
+                score += 1
+        
+        # 2. 成交量分析
         if today['Volume'] > today['Vol_MA5'] * 1.5:
-            reasons.append("單日爆量")
+            reasons.append("爆量 (資金湧入)")
+            score += 1
 
-        # 綜合篩選
-        if "黃金交叉" in reasons:
-            signal = "✨ 轉強關注"
-            if "單日爆量" in reasons:
-                signal = "🔥 爆量起漲"
-        elif "單日爆量" in reasons and today['Close'] > today['MA20']:
-             signal = "🚀 量增價強"
+        # 3. MACD 分析 (趨勢確認)
+        # 柱狀圖由負轉正 (翻紅) 或是 雙線黃金交叉
+        if yesterday['MACD_Hist'] < 0 and today['MACD_Hist'] > 0:
+            reasons.append("MACD翻紅 (波段起漲)")
+            score += 1.5
+        elif yesterday['MACD'] < yesterday['MACD_Signal'] and today['MACD'] > today['MACD_Signal']:
+            reasons.append("MACD交叉 (趨勢向上)")
+            score += 1
 
-        if signal:
-            # 把 RSI 數值也顯示在理由中，讓你參考
-            reasons.append(f"RSI: {current_rsi}")
-            
+        # 4. KD 分析 (買賣點)
+        # K值在低檔 (50以下) 黃金交叉
+        if current_k < 50 and yesterday['K'] < yesterday['D'] and today['K'] > today['D']:
+            reasons.append("KD低檔金叉 (最佳買點)")
+            score += 1.5
+
+        # === 總結訊號 ===
+        # 至少要有兩個好理由才顯示
+        if len(reasons) >= 2 or score >= 3:
+            if score >= 4:
+                signal = "🔥 強力買進"
+            elif "爆量" in reasons and "MACD" in str(reasons):
+                signal = "🚀 量滾量上攻"
+            else:
+                signal = "🧐 值得關注"
+                
+            # 格式化輸出細節
+            analysis_text = f"• RSI指標: {current_rsi} (安全)<br>"
+            analysis_text += f"• KD數值: K({current_k})<br>"
+            analysis_text += "• 觸發訊號: " + "、".join(reasons)
+
             return {
-                "Stock": ticker,
+                "Code": ticker,
+                "Name": stock_name,
                 "Price": current_price,
                 "Signal": signal,
-                "Details": " | ".join(reasons)
+                "Score": score,
+                "Details": analysis_text
             }
         
         return None
@@ -117,19 +167,18 @@ def analyze_stock(ticker):
 
 # === 主程式 ===
 stock_list = get_volume_leaders()
-print(f"共取得 {len(stock_list)} 檔人氣股票，開始分析...")
+print(f"共取得 {len(stock_list)} 檔人氣股票，開始深度分析...")
 
 results = []
 for i, stock in enumerate(stock_list):
     if i % 10 == 0:
         print(f"進度: {i}/{len(stock_list)}...")
-    
     res = analyze_stock(stock)
     if res:
         results.append(res)
 
-# 排序
-results.sort(key=lambda x: (x['Signal'] != "🔥 爆量起漲", x['Signal']))
+# 排序: 分數高的排前面
+results.sort(key=lambda x: x['Score'], reverse=True)
 
 # 產出 HTML
 html_content = f"""
@@ -137,57 +186,70 @@ html_content = f"""
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 人氣王雷達 (含過熱保護) 🛡️</title>
+    <title>AI 深度選股報告 📊</title>
     <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; background-color: #f4f6f8; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; background-color: #f0f2f5; }}
         .container {{ max-width: 800px; margin: 0 auto; }}
-        h1 {{ text-align: center; color: #2c3e50; }}
-        .summary {{ text-align: center; color: #666; margin-bottom: 20px; }}
-        .card {{ background: white; padding: 20px; margin-bottom: 15px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-left: 6px solid #ccc; }}
-        .card.buy {{ border-left-color: #e74c3c; }}
-        .card.watch {{ border-left-color: #f39c12; }}
-        .stock-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }}
-        .stock-id {{ font-size: 1.5em; font-weight: bold; color: #2c3e50; }}
-        .stock-price {{ font-size: 1.3em; font-weight: bold; color: #2c3e50; }}
-        .signal-tag {{ padding: 5px 10px; border-radius: 20px; color: white; font-weight: bold; font-size: 0.9em; }}
-        .tag-buy {{ background: linear-gradient(45deg, #e74c3c, #c0392b); }}
-        .tag-watch {{ background-color: #f39c12; }}
-        .details {{ color: #7f8c8d; font-size: 0.95em; margin-top: 5px; }}
-        .safe-badge {{ display: inline-block; background-color: #e8f5e9; color: #2e7d32; font-size: 0.8em; padding: 2px 6px; border-radius: 4px; margin-left: 10px; }}
+        h1 {{ text-align: center; color: #1a1a1a; }}
+        .summary {{ text-align: center; color: #666; margin-bottom: 30px; background: #fff; padding: 15px; border-radius: 10px; }}
+        .card {{ background: white; padding: 20px; margin-bottom: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: relative; overflow: hidden; }}
+        .card::before {{ content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; }}
+        .card.score-high::before {{ background-color: #d9534f; }} /* 高分紅條 */
+        .card.score-mid::before {{ background-color: #f0ad4e; }} /* 中分橘條 */
+        
+        .header {{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
+        .stock-info {{ display: flex; align-items: baseline; gap: 10px; }}
+        .stock-name {{ font-size: 1.4em; font-weight: bold; color: #333; }}
+        .stock-code {{ font-size: 0.9em; color: #888; }}
+        .price {{ font-size: 1.5em; font-weight: bold; color: #333; }}
+        
+        .signal-badge {{ display: inline-block; padding: 5px 12px; border-radius: 20px; color: white; font-weight: bold; font-size: 0.9em; transform: translateY(-2px); }}
+        .bg-red {{ background: linear-gradient(45deg, #e74c3c, #c0392b); box-shadow: 0 2px 5px rgba(231, 76, 60, 0.3); }}
+        .bg-orange {{ background-color: #f39c12; }}
+        
+        .analysis-box {{ background-color: #f8f9fa; padding: 15px; border-radius: 8px; color: #555; line-height: 1.6; font-size: 0.95em; }}
+        .score-star {{ color: #f1c40f; font-size: 1.2em; margin-left: auto; }}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🛡️ AI 人氣王雷達 <span style="font-size:0.6em; color:#777;">(已過濾高風險股)</span></h1>
-        <p class="summary">
-            掃描範圍: 今日成交量前 {len(stock_list)} 名<br>
-            篩選標準: 趨勢轉強 + <b>RSI < 75 (未過熱)</b><br>
-            發現機會: {len(results)} 檔<br>
+        <h1>📊 AI 深度選股報告</h1>
+        <div class="summary">
+            <b>今日掃描重點</b><br>
+            成交量前 {len(stock_list)} 大熱門股｜濾除高風險 (RSI>75)<br>
             更新時間: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-        </p>
+        </div>
 """
 
 if not results:
-    html_content += "<p style='text-align:center'>🛡️ 目前熱門股中，符合訊號且「未過熱」的標的很少，建議空手觀望。</p>"
+    html_content += "<div style='text-align:center; padding:50px;'>😴 今日大盤震盪，AI 建議多看少做，暫無高分標的。</div>"
 else:
     for item in results:
-        tag_class = "tag-watch"
-        card_class = "watch"
-        if "爆量" in item['Signal'] or "起漲" in item['Signal']:
-            tag_class = "tag-buy"
-            card_class = "buy"
-            
+        # 決定卡片樣式
+        score_class = "score-mid"
+        badge_class = "bg-orange"
+        stars = "⭐" * int(item['Score'])
+        
+        if item['Score'] >= 4:
+            score_class = "score-high"
+            badge_class = "bg-red"
+        
         html_content += f"""
-        <div class="card {card_class}">
-            <div class="stock-header">
-                <div>
-                    <span class="stock-id">{item['Stock']}</span>
-                    <span class="safe-badge">Safe (RSI < 75)</span>
+        <div class="card {score_class}">
+            <div class="header">
+                <div class="stock-info">
+                    <span class="stock-name">{item['Name']}</span>
+                    <span class="stock-code">{item['Code']}</span>
+                    <span class="signal-badge {badge_class}">{item['Signal']}</span>
                 </div>
-                <span class="signal-tag {tag_class}">{item['Signal']}</span>
-                <span class="stock-price">${item['Price']}</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span class="score-star">{stars}</span>
+                    <span class="price">${item['Price']}</span>
+                </div>
             </div>
-            <div class="details">{item['Details']}</div>
+            <div class="analysis-box">
+                {item['Details']}
+            </div>
         </div>
         """
 
