@@ -3,64 +3,491 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 股市雷達 📡</title>
+    <title>AI 人氣王雷達 (含過熱保護) 🛡️</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; background-color: #f0f2f5; }
-        .container { max-width: 600px; margin: 0 auto; }
-        h1 { text-align: center; color: #1a1a1a; margin-bottom: 10px; }
-        .time { text-align: center; color: #65676b; font-size: 0.8em; margin-bottom: 30px; }
-        .card { background: white; padding: 20px; margin-bottom: 15px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .stock-name { font-size: 1.2em; font-weight: bold; color: #1a1a1a; }
-        .price { font-size: 1.2em; font-weight: bold; color: #1a1a1a; }
-        .signal { font-weight: bold; padding: 5px 10px; border-radius: 6px; display: inline-block; }
-        .buy { background-color: #e7f3ff; color: #1877f2; }
-        .watch { background-color: #fff3e0; color: #f29339; }
-        .error { background-color: #ffebee; color: #c62828; }
-        .details { color: #65676b; font-size: 0.9em; margin-top: 8px; line-height: 1.4; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; background-color: #f4f6f8; }
+        .container { max-width: 800px; margin: 0 auto; }
+        h1 { text-align: center; color: #2c3e50; }
+        .summary { text-align: center; color: #666; margin-bottom: 20px; }
+        .card { background: white; padding: 20px; margin-bottom: 15px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-left: 6px solid #ccc; }
+        .card.buy { border-left-color: #e74c3c; }
+        .card.watch { border-left-color: #f39c12; }
+        .stock-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .stock-id { font-size: 1.5em; font-weight: bold; color: #2c3e50; }
+        .stock-price { font-size: 1.3em; font-weight: bold; color: #2c3e50; }
+        .signal-tag { padding: 5px 10px; border-radius: 20px; color: white; font-weight: bold; font-size: 0.9em; }
+        .tag-buy { background: linear-gradient(45deg, #e74c3c, #c0392b); }
+        .tag-watch { background-color: #f39c12; }
+        .details { color: #7f8c8d; font-size: 0.95em; margin-top: 5px; }
+        .safe-badge { display: inline-block; background-color: #e8f5e9; color: #2e7d32; font-size: 0.8em; padding: 2px 6px; border-radius: 4px; margin-left: 10px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📈 AI 選股雷達</h1>
-        <p class="time">更新時間: 2025-12-27 01:54:24</p>
+        <h1>🛡️ AI 人氣王雷達 <span style="font-size:0.6em; color:#777;">(已過濾高風險股)</span></h1>
+        <p class="summary">
+            掃描範圍: 今日成交量前 150 名<br>
+            篩選標準: 趨勢轉強 + <b>RSI < 75 (未過熱)</b><br>
+            發現機會: 38 檔<br>
+            更新時間: 2025-12-27 02:09:11
+        </p>
 
-        <div class="card">
-            <div class="card-header">
-                <span class="stock-name">2330.TW</span>
-                <span class="price">$1510.0</span>
+        <div class="card buy">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">6515.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-buy">🔥 爆量起漲</span>
+                <span class="stock-price">$2895.0</span>
             </div>
-            <div class="signal watch">🧐 關注</div>
-            <div class="details">站上月線 (趨勢向上)</div>
+            <div class="details">黃金交叉 | 單日爆量 | RSI: 65.4</div>
         </div>
-    
-        <div class="card">
-            <div class="card-header">
-                <span class="stock-name">2317.TW</span>
-                <span class="price">$225.5</span>
+        
+        <div class="card buy">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">6531.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-buy">🔥 爆量起漲</span>
+                <span class="stock-price">$412.0</span>
             </div>
-            <div class="signal watch">🧐 關注</div>
-            <div class="details">站上月線 (趨勢向上)</div>
+            <div class="details">黃金交叉 | 單日爆量 | RSI: 56.9</div>
         </div>
-    
-        <div class="card">
-            <div class="card-header">
-                <span class="stock-name">2454.TW</span>
-                <span class="price">$1385.0</span>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">3711.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">✨ 轉強關注</span>
+                <span class="stock-price">$240.5</span>
             </div>
-            <div class="signal watch">👀 觀望中</div>
-            <div class="details">目前無特殊訊號</div>
+            <div class="details">黃金交叉 | RSI: 60.6</div>
         </div>
-    
-        <div class="card">
-            <div class="card-header">
-                <span class="stock-name">0050.TW</span>
-                <span class="price">$64.63</span>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">1504.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">✨ 轉強關注</span>
+                <span class="stock-price">$86.5</span>
             </div>
-            <div class="signal watch">🧐 關注</div>
-            <div class="details">站上月線 (趨勢向上)</div>
+            <div class="details">黃金交叉 | RSI: 44.6</div>
         </div>
-    
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">6805.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">✨ 轉強關注</span>
+                <span class="stock-price">$1605.0</span>
+            </div>
+            <div class="details">黃金交叉 | RSI: 59.3</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">3231.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">✨ 轉強關注</span>
+                <span class="stock-price">$146.5</span>
+            </div>
+            <div class="details">黃金交叉 | RSI: 55.3</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">0052.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">✨ 轉強關注</span>
+                <span class="stock-price">$36.89</span>
+            </div>
+            <div class="details">黃金交叉 | RSI: 12.5</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">8043.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">✨ 轉強關注</span>
+                <span class="stock-price">$90.0</span>
+            </div>
+            <div class="details">黃金交叉 | RSI: 65.2</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">3131.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">✨ 轉強關注</span>
+                <span class="stock-price">$1535.0</span>
+            </div>
+            <div class="details">黃金交叉 | RSI: 59.2</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">6488.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">✨ 轉強關注</span>
+                <span class="stock-price">$391.0</span>
+            </div>
+            <div class="details">黃金交叉 | RSI: 51.4</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">00937B.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">✨ 轉強關注</span>
+                <span class="stock-price">$15.1</span>
+            </div>
+            <div class="details">黃金交叉 | RSI: 56.1</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">1605.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$33.45</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 64.8</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">6239.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$175.0</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 62.8</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">3008.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$2385.0</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 73.5</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">3167.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$240.0</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 64.4</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">3189.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$153.0</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 59.4</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">6257.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$109.5</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 64.7</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">4989.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$47.8</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 65.2</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">8112.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$75.3</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 59.4</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">8150.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$48.0</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 64.5</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">2329.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$56.6</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 68.6</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">2009.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$49.5</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 69.3</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">8422.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$26.65</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 70.2</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">1608.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$39.5</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 67.4</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">006208.TW</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$147.55</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 62.0</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">1815.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$92.6</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 66.7</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">3260.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$221.5</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 69.1</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">6223.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$2360.0</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 61.4</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">6510.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$2400.0</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 70.7</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">3264.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$102.0</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 68.5</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">5536.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$791.0</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 57.6</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">3265.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$122.5</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 72.0</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">3689.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$115.0</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 71.8</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">8111.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$75.8</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 64.2</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">5351.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$43.8</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 62.4</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">5340.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$67.1</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 61.1</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">8088.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$44.65</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 59.2</div>
+        </div>
+        
+        <div class="card watch">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">8096.TWO</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag tag-watch">🚀 量增價強</span>
+                <span class="stock-price">$52.0</span>
+            </div>
+            <div class="details">單日爆量 | RSI: 55.4</div>
+        </div>
+        
     </div>
 </body>
 </html>

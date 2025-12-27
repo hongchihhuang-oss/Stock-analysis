@@ -1,138 +1,195 @@
 import yfinance as yf
 import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 import ta
 import datetime
+import time
+import random
 
-# 1. 設定你想監控的股票清單
-stock_list = ['2330.TW', '2317.TW', '2454.TW', '0050.TW'] 
+def get_volume_leaders():
+    """
+    爬取 Yahoo 股市「成交量排行榜」的前 150 名股票
+    """
+    print("🕷️ 正在爬取 Yahoo 股市人氣排行榜...")
+    leaders = []
+    
+    try:
+        urls = [
+            "https://tw.stock.yahoo.com/rank/turnover?exchange=TAI", # 上市
+            "https://tw.stock.yahoo.com/rank/turnover?exchange=TWO"  # 上櫃
+        ]
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+
+        for url in urls:
+            response = requests.get(url, headers=headers)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            links = soup.find_all('a', href=True)
+            
+            for link in links:
+                href = link['href']
+                if "/quote/" in href and (".TW" in href or ".TWO" in href):
+                    ticker = href.split("/quote/")[-1]
+                    if ticker not in leaders:
+                        leaders.append(ticker)
+            
+            print(f"目前已找到 {len(leaders)} 檔熱門股...")
+            time.sleep(1)
+
+        return leaders[:150]
+
+    except Exception as e:
+        print(f"❌ 爬蟲發生錯誤: {e}")
+        return ['2330.TW', '2317.TW', '2454.TW'] # 發生錯誤時的備用清單
 
 def analyze_stock(ticker):
     try:
-        # 下載資料 (增加錯誤處理參數)
-        print(f"正在分析: {ticker}...")
-        df = yf.download(ticker, period="1y", progress=False)
+        # 下載資料
+        df = yf.download(ticker, period="3mo", progress=False)
         
-        # 檢查資料是否為空
-        if df.empty:
-            return {
-                "Stock": ticker, "Price": 0,
-                "Signal": "❌ 資料錯誤", "Details": "下載到的資料是空的 (Empty Data)"
-            }
+        if df.empty or len(df) < 20:
+            return None
 
-        # 處理 MultiIndex 問題 (新版 yfinance 可能會有多層欄位)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
-        # 檢查資料長度
-        if len(df) < 20:
-            return {
-                "Stock": ticker, "Price": 0,
-                "Signal": "❌ 資料不足", "Details": f"資料筆數太少 (只有 {len(df)} 筆)"
-            }
-
-        # 2. 計算技術指標
+        # === 計算技術指標 ===
+        # 1. 均線與成交量
         df['MA5'] = df['Close'].rolling(window=5).mean()
         df['MA20'] = df['Close'].rolling(window=20).mean()
         df['Vol_MA5'] = df['Volume'].rolling(window=5).mean()
         
-        # 取得昨天與今天
+        # 2. RSI 指標 (溫度計)
+        # 使用 ta 套件計算 RSI，參數通常設 14 天
+        rsi_indicator = ta.momentum.RSIIndicator(close=df['Close'], window=14)
+        df['RSI'] = rsi_indicator.rsi()
+        
         today = df.iloc[-1]
         yesterday = df.iloc[-2]
-        
-        # 取得目前股價
         current_price = round(float(today['Close']), 2)
+        current_rsi = round(float(today['RSI']), 1)
         
-        # 3. 判斷進場訊號
-        signal = "👀 觀望中"
+        # === 🛡️ 過熱保護機制 🛡️ ===
+        # 如果 RSI > 75，代表已經過熱，直接過濾掉，不看它了
+        if current_rsi > 75:
+            # 這裡我們選擇直接回傳 None (跳過)，或是你可以選擇回傳一個「過熱警告」
+            # 為了安全起見，我們這裡直接跳過，不讓它出現在清單上誘惑你
+            return None 
+
+        # === 進場邏輯判斷 ===
+        signal = None
         reasons = []
         
         # 條件 A: 黃金交叉
         if yesterday['MA5'] < yesterday['MA20'] and today['MA5'] > today['MA20']:
-            reasons.append("黃金交叉 (短線轉強)")
+            reasons.append("黃金交叉")
             
-        # 條件 B: 站上月線
-        if today['Close'] > today['MA20']:
-            reasons.append("站上月線 (趨勢向上)")
-
-        # 條件 C: 爆量
+        # 條件 B: 爆量 (今天量 > 5日均量 1.5 倍)
         if today['Volume'] > today['Vol_MA5'] * 1.5:
-            reasons.append("成交爆量")
+            reasons.append("單日爆量")
 
-        # 綜合判斷
-        if "黃金交叉 (短線轉強)" in reasons and "成交爆量" in reasons:
-            signal = "🔥 強力買進"
-        elif "黃金交叉 (短線轉強)" in reasons:
-            signal = "✨ 買進訊號"
-        elif len(reasons) > 0:
-            signal = "🧐 關注"
+        # 綜合篩選
+        if "黃金交叉" in reasons:
+            signal = "✨ 轉強關注"
+            if "單日爆量" in reasons:
+                signal = "🔥 爆量起漲"
+        elif "單日爆量" in reasons and today['Close'] > today['MA20']:
+             signal = "🚀 量增價強"
+
+        if signal:
+            # 把 RSI 數值也顯示在理由中，讓你參考
+            reasons.append(f"RSI: {current_rsi}")
             
-        return {
-            "Stock": ticker,
-            "Price": current_price,
-            "Signal": signal,
-            "Details": " | ".join(reasons) if reasons else "目前無特殊訊號"
-        }
+            return {
+                "Stock": ticker,
+                "Price": current_price,
+                "Signal": signal,
+                "Details": " | ".join(reasons)
+            }
+        
+        return None
             
     except Exception as e:
-        return {
-            "Stock": ticker,
-            "Price": 0,
-            "Signal": "❌ 程式錯誤",
-            "Details": f"錯誤原因: {str(e)}"
-        }
+        return None
 
-# 執行分析
+# === 主程式 ===
+stock_list = get_volume_leaders()
+print(f"共取得 {len(stock_list)} 檔人氣股票，開始分析...")
+
 results = []
-for stock in stock_list:
+for i, stock in enumerate(stock_list):
+    if i % 10 == 0:
+        print(f"進度: {i}/{len(stock_list)}...")
+    
     res = analyze_stock(stock)
-    results.append(res) # 不管有沒有結果，都加進去顯示
+    if res:
+        results.append(res)
 
-# 4. 產出 HTML
+# 排序
+results.sort(key=lambda x: (x['Signal'] != "🔥 爆量起漲", x['Signal']))
+
+# 產出 HTML
 html_content = f"""
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 股市雷達 📡</title>
+    <title>AI 人氣王雷達 (含過熱保護) 🛡️</title>
     <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; background-color: #f0f2f5; }}
-        .container {{ max-width: 600px; margin: 0 auto; }}
-        h1 {{ text-align: center; color: #1a1a1a; margin-bottom: 10px; }}
-        .time {{ text-align: center; color: #65676b; font-size: 0.8em; margin-bottom: 30px; }}
-        .card {{ background: white; padding: 20px; margin-bottom: 15px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-        .card-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }}
-        .stock-name {{ font-size: 1.2em; font-weight: bold; color: #1a1a1a; }}
-        .price {{ font-size: 1.2em; font-weight: bold; color: #1a1a1a; }}
-        .signal {{ font-weight: bold; padding: 5px 10px; border-radius: 6px; display: inline-block; }}
-        .buy {{ background-color: #e7f3ff; color: #1877f2; }}
-        .watch {{ background-color: #fff3e0; color: #f29339; }}
-        .error {{ background-color: #ffebee; color: #c62828; }}
-        .details {{ color: #65676b; font-size: 0.9em; margin-top: 8px; line-height: 1.4; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; background-color: #f4f6f8; }}
+        .container {{ max-width: 800px; margin: 0 auto; }}
+        h1 {{ text-align: center; color: #2c3e50; }}
+        .summary {{ text-align: center; color: #666; margin-bottom: 20px; }}
+        .card {{ background: white; padding: 20px; margin-bottom: 15px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-left: 6px solid #ccc; }}
+        .card.buy {{ border-left-color: #e74c3c; }}
+        .card.watch {{ border-left-color: #f39c12; }}
+        .stock-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }}
+        .stock-id {{ font-size: 1.5em; font-weight: bold; color: #2c3e50; }}
+        .stock-price {{ font-size: 1.3em; font-weight: bold; color: #2c3e50; }}
+        .signal-tag {{ padding: 5px 10px; border-radius: 20px; color: white; font-weight: bold; font-size: 0.9em; }}
+        .tag-buy {{ background: linear-gradient(45deg, #e74c3c, #c0392b); }}
+        .tag-watch {{ background-color: #f39c12; }}
+        .details {{ color: #7f8c8d; font-size: 0.95em; margin-top: 5px; }}
+        .safe-badge {{ display: inline-block; background-color: #e8f5e9; color: #2e7d32; font-size: 0.8em; padding: 2px 6px; border-radius: 4px; margin-left: 10px; }}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📈 AI 選股雷達</h1>
-        <p class="time">更新時間: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        <h1>🛡️ AI 人氣王雷達 <span style="font-size:0.6em; color:#777;">(已過濾高風險股)</span></h1>
+        <p class="summary">
+            掃描範圍: 今日成交量前 {len(stock_list)} 名<br>
+            篩選標準: 趨勢轉強 + <b>RSI < 75 (未過熱)</b><br>
+            發現機會: {len(results)} 檔<br>
+            更新時間: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        </p>
 """
 
-for item in results:
-    style_class = "watch"
-    if "買進" in item['Signal']:
-        style_class = "buy"
-    elif "錯誤" in item['Signal']:
-        style_class = "error"
-        
-    html_content += f"""
-        <div class="card">
-            <div class="card-header">
-                <span class="stock-name">{item['Stock']}</span>
-                <span class="price">${item['Price']}</span>
+if not results:
+    html_content += "<p style='text-align:center'>🛡️ 目前熱門股中，符合訊號且「未過熱」的標的很少，建議空手觀望。</p>"
+else:
+    for item in results:
+        tag_class = "tag-watch"
+        card_class = "watch"
+        if "爆量" in item['Signal'] or "起漲" in item['Signal']:
+            tag_class = "tag-buy"
+            card_class = "buy"
+            
+        html_content += f"""
+        <div class="card {card_class}">
+            <div class="stock-header">
+                <div>
+                    <span class="stock-id">{item['Stock']}</span>
+                    <span class="safe-badge">Safe (RSI < 75)</span>
+                </div>
+                <span class="signal-tag {tag_class}">{item['Signal']}</span>
+                <span class="stock-price">${item['Price']}</span>
             </div>
-            <div class="signal {style_class}">{item['Signal']}</div>
             <div class="details">{item['Details']}</div>
         </div>
-    """
+        """
 
 html_content += """
     </div>
